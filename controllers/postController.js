@@ -205,6 +205,29 @@ exports.deletePost = async (req, res) => {
 
 };
 
+// 게시글 조회수 증가
+exports.increaseViewCount = async (req, res) => {
+    const postId = req.params.postId;
+
+
+    try {
+        // 조회수 증가
+        await pool.execute('UPDATE post SET views = views + 1 WHERE post_id = ?', [postId]);
+
+        // 현재 조회수 반환
+        const [rows] = await pool.execute('SELECT views FROM post WHERE post_id = ?', [postId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+        }
+
+        res.status(200).json({ views: rows[0].views });
+    } catch (error) {
+        console.error('조회수 증가 중 오류 발생:', error);
+        res.status(500).json({ message: '조회수 업데이트 중 오류가 발생했습니다.' });
+    }
+};
+
+
 
 
 
