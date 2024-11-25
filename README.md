@@ -9,4 +9,4 @@
 3. node app.js
 
 4. Database Structure
-![Database Structure](./community_DB.png)
+   <img src="./community_DB.png" alt="Database Structure" width="50%">
