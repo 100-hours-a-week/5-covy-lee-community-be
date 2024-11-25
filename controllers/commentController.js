@@ -24,7 +24,7 @@ exports.createComment = async (req, res) => {
         );
 
         const [user] = await pool.execute(
-            'SELECT username FROM user WHERE user_id = ?',
+            'SELECT username, image FROM user WHERE user_id = ?',
             [userId]
         );
 
@@ -32,6 +32,7 @@ exports.createComment = async (req, res) => {
             message: '댓글이 성공적으로 작성되었습니다.',
             commentId: result.insertId,
             author: user[0]?.username || '익명',
+            author_image: user[0]?.image || null,
             content,
             created_at: new Date().toISOString(), // 댓글 작성 시간을 ISO 형식으로 반환
         });
@@ -42,13 +43,23 @@ exports.createComment = async (req, res) => {
 };
 
 
+
 exports.getComments = async (req, res) => {
     const postId = req.params.postId;
 
     try {
         // 댓글 목록을 오래된 순으로 정렬하여 반환
         const [comments] = await pool.execute(
-            'SELECT c.comment_id, c.content, c.created_at, u.username AS author FROM comment c JOIN user u ON c.user_id = u.user_id WHERE c.post_id = ? ORDER BY c.created_at ASC',
+            `SELECT 
+                c.comment_id, 
+                c.content, 
+                c.created_at, 
+                u.username AS author, 
+                u.image AS author_image 
+             FROM comment c 
+             JOIN user u ON c.user_id = u.user_id 
+             WHERE c.post_id = ? 
+             ORDER BY c.created_at ASC`,
             [postId]
         );
 
@@ -58,6 +69,7 @@ exports.getComments = async (req, res) => {
         res.status(500).json({ message: '댓글 목록을 가져오는 데 실패했습니다.' });
     }
 };
+
 
 
 // 댓글 수정 함수

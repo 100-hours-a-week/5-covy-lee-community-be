@@ -39,6 +39,7 @@ exports.createPost = async (req, res) => {
 // 게시글 목록 가져오기
 exports.getPosts = async (req, res) => {
     try {
+        // 게시글 목록 가져오기
         const [posts] = await pool.execute(
             `SELECT
                  post.post_id AS id,
@@ -47,11 +48,18 @@ exports.getPosts = async (req, res) => {
                  post.image,
                  post.created_at,
                  user.username AS author,
-                 user.image AS author_image
+                 user.image AS author_image,
+                 (SELECT COUNT(*) FROM comment WHERE comment.post_id = post.post_id) AS comment_count,
+                 (SELECT COUNT(*) FROM \`like\` WHERE \`like\`.post_id = post.post_id) AS like_count
              FROM post
                       INNER JOIN user ON post.user_id = user.user_id
              ORDER BY post.created_at DESC`
         );
+
+        // 모든 게시글의 작성자 이름과 이미지를 로그로 출력
+        posts.forEach(post => {
+            console.log(`작성자: ${post.author}, 프로필 이미지: ${post.author_image}`);
+        });
 
         res.status(200).json(posts);
     } catch (error) {
@@ -59,6 +67,8 @@ exports.getPosts = async (req, res) => {
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
+
 
 
 // 특정 게시글 가져오기
