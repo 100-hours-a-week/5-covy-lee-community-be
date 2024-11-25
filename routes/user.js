@@ -2,6 +2,7 @@ const express = require('express');
 const { registerUser, loginUser, updateUserProfile, deleteUser, checkSession, logoutUser, updatePassword} = require('../controllers/userController');
 const { createPost, getPosts, getPostById, deletePost, updatePost, increaseViewCount} = require('../controllers/postController');
 const { createComment,getComments, updateComment, deleteComment } = require('../controllers/commentController');
+const { toggleLike , getLikes, getLikeStatus} = require('../controllers/likeController');
 
 const router = express.Router();
 const multer = require('multer');
@@ -105,6 +106,13 @@ router.put('/api/comments/:commentId', updateComment);
 
 // 댓글 삭제 API
 router.delete('/api/comments/:commentId', deleteComment);
+
+// 게시글 좋아요 API
+router.post("/api/posts/:postId/like", toggleLike);
+
+router.get("/api/posts/:postId/likes", getLikes);
+
+router.get("/api/posts/:postId/like-status", getLikeStatus);
 
 
 // 세션 체크 API
