@@ -39,6 +39,7 @@ exports.createPost = async (req, res) => {
 // 게시글 목록 가져오기
 exports.getPosts = async (req, res) => {
     try {
+        // 게시글 목록 가져오기
         const [posts] = await pool.execute(
             `SELECT
                  post.post_id AS id,
@@ -47,11 +48,18 @@ exports.getPosts = async (req, res) => {
                  post.image,
                  post.created_at,
                  user.username AS author,
-                 user.image AS author_image
+                 user.image AS author_image,
+                 (SELECT COUNT(*) FROM comment WHERE comment.post_id = post.post_id) AS comment_count,
+                 (SELECT COUNT(*) FROM \`like\` WHERE \`like\`.post_id = post.post_id) AS like_count
              FROM post
                       INNER JOIN user ON post.user_id = user.user_id
              ORDER BY post.created_at DESC`
         );
+
+        // 모든 게시글의 작성자 이름과 이미지를 로그로 출력
+        posts.forEach(post => {
+            console.log(`작성자: ${post.author}, 프로필 이미지: ${post.author_image}`);
+        });
 
         res.status(200).json(posts);
     } catch (error) {
@@ -59,6 +67,8 @@ exports.getPosts = async (req, res) => {
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
+
 
 
 // 특정 게시글 가져오기
@@ -204,6 +214,29 @@ exports.deletePost = async (req, res) => {
     }
 
 };
+
+// 게시글 조회수 증가
+exports.increaseViewCount = async (req, res) => {
+    const postId = req.params.postId;
+
+
+    try {
+        // 조회수 증가
+        await pool.execute('UPDATE post SET views = views + 1 WHERE post_id = ?', [postId]);
+
+        // 현재 조회수 반환
+        const [rows] = await pool.execute('SELECT views FROM post WHERE post_id = ?', [postId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+        }
+
+        res.status(200).json({ views: rows[0].views });
+    } catch (error) {
+        console.error('조회수 증가 중 오류 발생:', error);
+        res.status(500).json({ message: '조회수 업데이트 중 오류가 발생했습니다.' });
+    }
+};
+
 
 
 
