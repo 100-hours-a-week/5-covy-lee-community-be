@@ -47,8 +47,6 @@ exports.loginUser = async (req, res) => {
         // 세션에 user 정보 저장
         req.session.user = { id: user[0].user_id, email: user[0].email, username: user[0].username, image: user[0].image };
 
-        // 세션이 제대로 저장되는지 확인
-        console.log('User session after login:', req.session.user); // 로그 추가
 
         res.status(200).json({ message: '로그인 성공', user: req.session.user });
     } catch (error) {
@@ -68,18 +66,18 @@ exports.logoutUser = (req, res) => {
 };
 
 
-// 회원정보 수정 함수
 exports.updateUserProfile = async (req, res) => {
-    let userId = req.params.userId;
+    const userId = req.params.userId; // URL에서 사용자 ID 추출
+    const { username } = req.body; // 요청 본문에서 사용자명 추출
+    const profilePic = req.file ? req.file.filename : null; // multer에서 처리된 프로필 이미지 파일 이름
 
-    const { username } = req.body;
-    const profilePic = req.file ? req.file.filename : null;
-
+    // 입력 데이터 유효성 검사
     if (!username && !profilePic) {
         return res.status(400).json({ message: '수정할 정보가 없습니다.' });
     }
 
     try {
+        // 사용자 정보 업데이트를 위한 SQL 쿼리 작성
         let updateQuery = 'UPDATE user SET ';
         let updateParams = [];
 
@@ -93,33 +91,94 @@ exports.updateUserProfile = async (req, res) => {
             updateParams.push(profilePic);
         }
 
-        updateQuery = updateQuery.slice(0, -2);
+        updateQuery = updateQuery.slice(0, -2); // 마지막 콤마 제거
         updateQuery += ' WHERE user_id = ?';
         updateParams.push(userId);
 
+        // 데이터베이스에 업데이트 실행
         const [result] = await pool.execute(updateQuery, updateParams);
 
         if (result.affectedRows > 0) {
-            // 세션에 user가 없으면 초기화
+            // 세션 데이터 갱신
             if (!req.session.user) {
                 req.session.user = {};
             }
+            if (username) req.session.user.username = username;
+            if (profilePic) req.session.user.image = profilePic;
 
-            // 세션의 사용자 정보 업데이트
-            req.session.user.username = username;  // 세션의 사용자명 업데이트
-            if (profilePic) {
-                req.session.user.image = profilePic;  // 프로필 이미지도 세션에 저장
-            }
+            // 세션 저장
+            req.session.save((err) => {
+                if (err) {
+                    console.error('세션 저장 오류:', err);
+                    return res.status(500).json({ message: '세션 저장 중 오류가 발생했습니다.' });
+                }
 
-            return res.status(200).json({ message: '회원정보가 성공적으로 업데이트되었습니다.' });
+                // 세션 저장 후 서버 콘솔에 최신 데이터 출력
+                console.log('최신 세션 데이터:', req.session.user);
+
+                // 성공적인 응답 반환
+                return res.status(200).json({
+                    message: '회원정보가 성공적으로 업데이트되었습니다.',
+                    user: {
+                        id: userId,
+                        username: req.session.user.username,
+                        image: req.session.user.image,
+                    },
+                });
+            });
         } else {
             return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
         }
     } catch (error) {
-        console.error(error);
+        console.error('회원정보 수정 중 오류 발생:', error);
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
+
+exports.checkSession = async (req, res) => {
+    try {
+        const sessionUserId = req.session?.user?.id; // 세션에 저장된 사용자 ID 확인
+        if (!sessionUserId) {
+            return res.status(401).json({ loggedIn: false, message: '로그인이 필요합니다.' });
+        }
+
+        // 데이터베이스에서 사용자 정보 가져오기
+        const [userRows] = await pool.execute('SELECT user_id, email, username, image FROM user WHERE user_id = ?', [sessionUserId]);
+        if (userRows.length === 0) {
+            return res.status(404).json({ loggedIn: false, message: '사용자를 찾을 수 없습니다.' });
+        }
+
+        const user = userRows[0];
+
+        // 세션 데이터를 동기화 (필요한 경우)
+        req.session.user = {
+            id: user.user_id,
+            email: user.email,
+            username: user.username,
+            image: user.image
+        };
+
+        console.log('DB에서 가져온 사용자 데이터:', user);
+
+        res.status(200).json({
+            loggedIn: true,
+            user: {
+                id: user.user_id,
+                email: user.email,
+                username: user.username,
+                image: user.image
+            }
+        });
+    } catch (error) {
+        console.error('checkSession 오류:', error);
+        res.status(500).json({ loggedIn: false, message: '서버 오류가 발생했습니다.' });
+    }
+};
+
+
+
+
 
 // 회원탈퇴 함수
 exports.deleteUser = async (req, res) => {
@@ -192,24 +251,46 @@ exports.createPost = async (req, res) => {
     }
 };
 
-exports.checkSession = (req, res) => {
-    if (req.session.user) {
-        // 세션 데이터 확인
-        console.log('Session data:', req.session.user);
 
-        res.status(200).json({
-            loggedIn: true,
-            user: {
-                id: req.session.user.id,
-                email: req.session.user.email,
-                username: req.session.user.username,
-                image: req.session.user.image
-            }
-        });
-    } else {
-        res.status(401).json({ loggedIn: false, message: '로그인이 필요합니다.' });
+
+
+
+
+exports.updateSession = (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ message: '로그인이 필요합니다.' });
     }
+
+    const { username, image } = req.body;
+
+    if (!username && !image) {
+        return res.status(400).json({ message: '업데이트할 정보가 없습니다.' });
+    }
+
+    // 세션 데이터 업데이트
+    const updatedUser = { ...req.session.user };
+
+    if (username) updatedUser.username = username;
+    if (image) updatedUser.image = image;
+
+    req.session.user = updatedUser; // 세션 업데이트
+
+    console.log('Updated session data:', req.session.user);
+
+    res.status(200).json({
+        message: '세션이 성공적으로 업데이트되었습니다.',
+        user: {
+            id: req.session.user.id,
+            email: req.session.user.email,
+            username: req.session.user.username,
+            image: req.session.user.image
+        }
+    });
 };
+
+
+
+
 
 // 비밀번호 수정 함수
 exports.updatePassword = async (req, res) => {
