@@ -183,9 +183,7 @@ exports.deletePost = async (req, res) => {
     console.log('User ID:', userId);
     console.log('Post ID:', postId);
 
-    if (!userId) {
-        return res.status(401).json({ message: '로그인이 필요합니다.' });
-    }
+
 
     try {
         console.log('쿼리 실행: postId:', postId, 'userId:', userId);
