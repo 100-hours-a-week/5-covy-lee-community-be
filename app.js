@@ -19,8 +19,7 @@ app.use(session({
         maxAge: 60000000
     }
 }));
-
-
+// 미들웨어 맨 아래로 옮기니까 서버 실행안됨;;
 app.use(cors({
     origin: 'http://localhost:5050',
     credentials: true
@@ -29,13 +28,10 @@ app.use(cors({
 // JSON 및 정적 파일 제공
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-// 정적 파일 제공
 app.use('/profile_images', express.static(path.join(__dirname, '../profile_images')));
 app.use('/post_images', express.static(path.join(__dirname, '../post_images')));
-
-
-// 라우트 등록
 app.use(userRoutes);
+
 
 
 app.listen(PORT, () => {
