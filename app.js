@@ -21,7 +21,7 @@ app.use(session({
 }));
 // 미들웨어 맨 아래로 옮기니까 서버 실행안됨;;
 app.use(cors({
-    origin: 'http://localhost:5050',
+    origin: `${process.env.SERVER_URL}`,
     credentials: true
 }));
 

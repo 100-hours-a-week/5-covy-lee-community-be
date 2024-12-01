@@ -119,7 +119,5 @@ router.get("/api/posts/:postId/like-status", getLikeStatus);
 router.get('/api/check-session', checkSession);
 // 세션 업데이트
 router.post('/api/update-session', updateSession);
-// 세션확인 미들웨어
-//router.use('/api/posts', verifySession);
 
 module.exports = router;
