@@ -1,7 +1,12 @@
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const express = require('express');
 const path = require('path');
+
 const userRoutes = require('./routes/user'); // 사용자 라우트 모듈 가져오기
+const postRoutes = require('./routes/post'); // 사용자 라우트 모듈 가져오기
+const commentRoutes = require('./routes/comment'); // 사용자 라우트 모듈 가져오기
+const likeRoutes = require('./routes/like'); // 사용자 라우트 모듈 가져오기
+
 const cors = require('cors');
 const session = require('express-session');
 require('dotenv').config();
@@ -31,6 +36,9 @@ app.use(express.static(path.join(__dirname)));
 app.use('/profile_images', express.static(path.join(__dirname, '../profile_images')));
 app.use('/post_images', express.static(path.join(__dirname, '../post_images')));
 app.use(userRoutes);
+app.use(postRoutes);
+app.use(commentRoutes);
+app.use(likeRoutes);
 
 
 
