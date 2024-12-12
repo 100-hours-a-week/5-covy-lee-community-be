@@ -2,3 +2,5 @@ node_modules/
 post_images/
 profile_images/
 .env
+Dockerfile
+docker-compose.yml

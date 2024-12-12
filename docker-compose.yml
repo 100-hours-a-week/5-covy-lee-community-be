@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  db:
+    image: community_db
+    container_name: community_database
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  backend:
+    image: backend
+    container_name: community_backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: alsrn1357!
+      DB_NAME: community
+      DB_PORT: 3306
+
+  frontend:
+    image: frontend
+    container_name: community_frontend
+    ports:
+      - "5050:5050"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
