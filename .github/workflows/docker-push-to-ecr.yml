@@ -3,24 +3,29 @@ name: Build and Push to ECR
 on:
   push:
     branches:
-      - master  # main 브랜치에 푸시될 때 실행
+      - master  # master 브랜치에 푸시될 때 실행
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. GitHub Repository 코드 가져오기
       - name: Checkout repository
-        uses: actions/checkout@v3  # GitHub Repository 코드 가져오기
+        uses: actions/checkout@v3
 
+      # 2. AWS ECR 로그인
       - name: Log in to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1  # AWS ECR 로그인
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          region: ${{ secrets.AWS_REGION }}  # Secrets에서 AWS_REGION 가져오기
 
+      # 3. Docker 이미지 빌드 및 푸시
       - name: Build and Push Docker Image
         env:
-          AWS_REGION: ap-northeast-2  # AWS 리전
-          ECR_REGISTRY: 340752825399.dkr.ecr.ap-northeast-2.amazonaws.com  # ECR 레지스트리 URI
+          AWS_REGION: ${{ secrets.AWS_REGION }}  # AWS 리전
+          ECR_REGISTRY: 340752825399.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com  # 레지스트리 URI
           ECR_REPOSITORY: mingoo-repo  # ECR 리포지토리 이름
           IMAGE_TAG: ${{ github.sha }}  # Git 커밋 SHA를 이미지 태그로 사용
         run: |
