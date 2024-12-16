@@ -42,23 +42,22 @@ exports.createComment = async (req, res) => {
     }
 };
 
-
-
 exports.getComments = async (req, res) => {
     const postId = req.params.postId;
 
     try {
         // 댓글 목록을 오래된 순으로 정렬하여 반환
         const [comments] = await pool.execute(
-            `SELECT 
-                c.comment_id, 
-                c.content, 
-                c.created_at, 
-                u.username AS author, 
-                u.image AS author_image 
-             FROM comment c 
-             JOIN user u ON c.user_id = u.user_id 
-             WHERE c.post_id = ? 
+            `SELECT
+                 c.comment_id,
+                 c.content,
+                 c.created_at,
+                 c.user_id AS author_id, -- 댓글 작성자 ID 추가
+                 u.username AS author,
+                 u.image AS author_image
+             FROM comment c
+                      JOIN user u ON c.user_id = u.user_id
+             WHERE c.post_id = ?
              ORDER BY c.created_at ASC`,
             [postId]
         );
@@ -69,6 +68,7 @@ exports.getComments = async (req, res) => {
         res.status(500).json({ message: '댓글 목록을 가져오는 데 실패했습니다.' });
     }
 };
+
 
 
 

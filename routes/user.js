@@ -1,10 +1,13 @@
 const express = require('express');
-const { registerUser,updateSession ,loginUser, updateUserProfile, deleteUser, checkSession, logoutUser, updatePassword} = require('../controllers/userController');
+const { registerUser,checkUsername,updateSession ,loginUser, updateUserProfile, deleteUser, checkSession, logoutUser, updatePassword} = require('../controllers/userController');
 const { profileUpload, verifySession } = require('../middlewares/middleware');
 const router = express.Router();
 
 // 회원가입 API
 router.post('/api/register', profileUpload.single('profilePic'), registerUser);
+
+// 닉네임 중복 검사 API
+router.get('/api/check-username', checkUsername);
 
 // 로그인 API
 router.post('/api/login', loginUser);
