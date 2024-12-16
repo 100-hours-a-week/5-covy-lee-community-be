@@ -1,6 +1,7 @@
 node_modules/
 post_images/
 profile_images/
+.github/
 .env
 Dockerfile
 docker-compose.yml
