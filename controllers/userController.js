@@ -11,11 +11,19 @@ exports.registerUser = async (req, res) => {
     }
 
     try {
-        const [existingUser] = await pool.execute('SELECT * FROM user WHERE email = ?', [email]);
-        if (existingUser.length > 0) {
+        // 이메일 중복 검사
+        const [existingEmail] = await pool.execute('SELECT * FROM user WHERE email = ?', [email]);
+        if (existingEmail.length > 0) {
             return res.status(400).json({ message: '이미 등록된 이메일입니다.' });
         }
 
+        // username 중복 검사
+        const [existingUsername] = await pool.execute('SELECT * FROM user WHERE username = ?', [username]);
+        if (existingUsername.length > 0) {
+            return res.status(400).json({ message: '이미 사용 중인 닉네임입니다.' });
+        }
+
+        // 비밀번호 해싱 및 사용자 등록
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await pool.execute(
             'INSERT INTO user (email, password, username, image) VALUES (?, ?, ?, ?)',
@@ -28,6 +36,28 @@ exports.registerUser = async (req, res) => {
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
+// 닉네임 중복 검사 API
+exports.checkUsername = async (req, res) => {
+    const { username } = req.query; // GET 요청으로 전달받음
+
+    if (!username) {
+        return res.status(400).json({ message: '사용자 이름을 입력해주세요.' });
+    }
+
+    try {
+        const [existingUsername] = await pool.execute('SELECT * FROM user WHERE username = ?', [username]);
+        if (existingUsername.length > 0) {
+            return res.status(409).json({ message: '이미 사용 중인 사용자 이름입니다.' }); // Conflict
+        }
+        res.status(200).json({ message: '사용 가능한 사용자 이름입니다.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+    }
+};
+
+
 
 // 로그인 API
 exports.loginUser = async (req, res) => {

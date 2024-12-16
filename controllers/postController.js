@@ -48,6 +48,7 @@ exports.getPosts = async (req, res) => {
                  post.image,
                  post.created_at,
                  post.views, -- 조회수 추가
+                 user.user_id AS author_id, -- 작성자 ID 추가
                  user.username AS author,
                  user.image AS author_image,
                  (SELECT COUNT(*) FROM comment WHERE comment.post_id = post.post_id) AS comment_count,
@@ -57,14 +58,13 @@ exports.getPosts = async (req, res) => {
              ORDER BY post.created_at DESC`
         );
 
-
-
         res.status(200).json(posts);
     } catch (error) {
         console.error('게시글 목록 가져오기 오류:', error);
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 
 
@@ -82,7 +82,8 @@ exports.getPostById = async (req, res) => {
                 post.content, 
                 post.image, 
                 post.created_at, 
-                post.updated_at, 
+                post.updated_at,
+                user.user_id AS author_id,
                 user.username AS author, 
                 user.image AS author_image 
              FROM post 

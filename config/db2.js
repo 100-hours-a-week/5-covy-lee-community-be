@@ -7,7 +7,7 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASS,
     database: process.env.DB_NAME,
-    //port: process.env.DB_PORT || 3306, // 포트를 환경 변수로 지정하거나 기본값 3306 사용
+    port: process.env.DB_PORT || 3306, // 포트를 환경 변수로 지정하거나 기본값 3306 사용
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
