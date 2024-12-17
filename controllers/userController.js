@@ -96,6 +96,7 @@ exports.logoutUser = (req, res) => {
 };
 
 
+
 exports.updateUserProfile = async (req, res) => {
     const userId = req.params.userId; // URL에서 사용자 ID 추출
     const { username } = req.body; // 요청 본문에서 사용자명 추출
