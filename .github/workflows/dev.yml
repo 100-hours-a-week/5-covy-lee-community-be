@@ -1,0 +1,28 @@
+name: EC2 Git Pull on Push
+
+on:
+  push:
+    branches:
+      - master  # master 브랜치에 푸시될 때 실행
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. GitHub Repository 코드 가져오기
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. EC2 인스턴스로 SSH 접속 후 Git Pull 실행
+      - name: SSH into EC2 and Pull Latest Code
+        uses: appleboy/ssh-action@v1.0.0  # SSH를 지원하는 GitHub Action
+        with:
+          host: ${{ secrets.EC2_HOST }}       # EC2 인스턴스의 Public IP
+          username: ${{ secrets.EC2_USER }}   # SSH 사용자명
+          key: ${{ secrets.EC2_SSH_KEY }}     # SSH 개인 키
+          script: |
+            cd /home/ubuntu/community/5-covy-lee-community-be   # 프로젝트 폴더 경로로 이동
+            git checkout master        # master 브랜치 확인
+            git pull origin master     # 최신 코드 가져오기
+            echo "Git pull completed successfully!"
