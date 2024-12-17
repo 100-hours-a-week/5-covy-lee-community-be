@@ -26,9 +26,13 @@ app.use(session({
 }));
 // 미들웨어 맨 아래로 옮기니까 서버 실행안됨;;
 app.use(cors({
-    origin: `${process.env.SERVER_URL}`,
+    origin: [
+        process.env.SERVER_URL,
+        `${process.env.SERVER_URL}:5050`
+    ],
     credentials: true
 }));
+
 
 // JSON 및 정적 파일 제공
 app.use(express.json());
