@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 // 댓글 가져오기
-router.get('/posts/:postId/comments', getComments);
+router.get('/api/posts/:postId/comments', getComments);
 
 // 댓글 작성 API
 router.post('/api/posts/:postId/comments', createComment);
