@@ -327,14 +327,14 @@ exports.updateSession = (req, res) => {
 exports.updatePassword = async (req, res) => {
     console.log('Session:', req.session); // 세션 객체 전체 확인
     console.log('Session User:', req.session?.user); // 세션 내 사용자 정보 확인
-    const { newPassword, confirmPassword } = req.body; // 새로운 비밀번호와 확인 비밀번호
+    const { currentPassword, newPassword, confirmPassword } = req.body; // 현재 비밀번호, 새 비밀번호, 확인 비밀번호
     const userId = req.session?.user?.id || null; // 세션에서 사용자 ID 가져오기
 
     if (!userId) {
         return res.status(401).json({ message: '로그인이 필요합니다.' }); // 로그인하지 않은 사용자 처리
     }
 
-    if (!newPassword || !confirmPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
         return res.status(400).json({ message: '모든 필드를 입력해주세요.' }); // 필드가 비어있는 경우
     }
 
@@ -351,6 +351,22 @@ exports.updatePassword = async (req, res) => {
     }
 
     try {
+        // 데이터베이스에서 현재 비밀번호 가져오기
+        const [user] = await pool.execute('SELECT password FROM user WHERE user_id = ?', [userId]);
+
+        if (user.length === 0) {
+            return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' }); // 사용자 없음
+        }
+
+        const validCurrentPassword = await bcrypt.compare(currentPassword, user[0].password);
+        if (!validCurrentPassword) {
+            return res.status(400).json({ message: '현재 비밀번호가 일치하지 않습니다.' }); // 현재 비밀번호 불일치
+        }
+
+        if (await bcrypt.compare(newPassword, user[0].password)) {
+            return res.status(400).json({ message: '새 비밀번호는 기존 비밀번호와 다르게 설정해야 합니다.' }); // 새 비밀번호가 기존 비밀번호와 동일
+        }
+
         // 새 비밀번호 암호화
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
@@ -370,5 +386,6 @@ exports.updatePassword = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' }); // 서버 오류 처리
     }
 };
+
 
 

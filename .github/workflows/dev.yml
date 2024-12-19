@@ -25,4 +25,6 @@ jobs:
             cd /home/ubuntu/community/5-covy-lee-community-be   # 프로젝트 폴더 경로로 이동
             git checkout master        # master 브랜치 확인
             git pull origin master     # 최신 코드 가져오기
+            cd /home/ubuntu
+            ./server-restart.sh # 서버 재실행
             echo "Git pull completed successfully!"
