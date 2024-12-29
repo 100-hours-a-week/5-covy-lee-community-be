@@ -1,4 +1,5 @@
 const pool = require("../config/db2");
+const redis = require("redis");
 
 exports.createPost = async (req, res) => {
     const { title, content } = req.body;
@@ -83,6 +84,7 @@ exports.getPostById = async (req, res) => {
                 post.image, 
                 post.created_at, 
                 post.updated_at,
+                post.views,
                 user.user_id AS author_id,
                 user.username AS author, 
                 user.image AS author_image 
@@ -213,16 +215,42 @@ exports.deletePost = async (req, res) => {
 
 };
 
+// Redis 클라이언트 생성
+const redisClient = redis.createClient();
+
+(async () => {
+    try {
+        await redisClient.connect(); // Redis 연결
+        console.log("Redis 연결 성공");
+    } catch (error) {
+        console.error("Redis 연결 실패:", error);
+    }
+})();
+
 // 게시글 조회수 증가
 exports.increaseViewCount = async (req, res) => {
     const postId = req.params.postId;
+    const userIdentifier = req.ip; // 사용자 식별자 (IP 사용)
 
+    // Redis 키 생성
+    const cacheKey = `view:${postId}:${userIdentifier}`;
 
     try {
-        // 조회수 증가
+        // 1. Redis에서 키 확인
+        const alreadyViewed = await redisClient.get(cacheKey);
+
+        if (alreadyViewed) {
+            // 캐시에 키가 존재하면 조회수 증가하지 않음
+            return res.status(200).json({ message: "조회수는 이미 증가했습니다." });
+        }
+
+        // 2. 조회수 증가
         await pool.execute('UPDATE post SET views = views + 1 WHERE post_id = ?', [postId]);
 
-        // 현재 조회수 반환
+        // 3. Redis에 키 설정 (1시간 TTL)
+        await redisClient.set(cacheKey, "true", { EX: 60 * 120  }); // "true"를 문자열로 전달
+
+        // 4. 현재 조회수 반환
         const [rows] = await pool.execute('SELECT views FROM post WHERE post_id = ?', [postId]);
         if (rows.length === 0) {
             return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
@@ -230,10 +258,11 @@ exports.increaseViewCount = async (req, res) => {
 
         res.status(200).json({ views: rows[0].views });
     } catch (error) {
-        console.error('조회수 증가 중 오류 발생:', error);
-        res.status(500).json({ message: '조회수 업데이트 중 오류가 발생했습니다.' });
+        console.error("조회수 증가 중 오류 발생:", error);
+        res.status(500).json({ message: "조회수 업데이트 중 오류가 발생했습니다." });
     }
 };
+
 
 
 
