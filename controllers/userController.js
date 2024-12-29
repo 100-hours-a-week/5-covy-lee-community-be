@@ -343,7 +343,7 @@ exports.updatePassword = async (req, res) => {
     }
 
     // 비밀번호 유효성 검사 (서버 측)
-    const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/;
+    const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+=~`|<>?/\\{}[\]:;'",.-])[A-Za-z\d!@#$%^&*()_+=~`|<>?/\\{}[\]:;'",.-]{8,20}$/;
     if (!passwordPattern.test(newPassword)) {
         return res.status(400).json({
             message: '비밀번호는 8자 이상 20자 이하이며, 대문자, 소문자, 숫자, 특수문자를 최소 1개 포함해야 합니다.'
