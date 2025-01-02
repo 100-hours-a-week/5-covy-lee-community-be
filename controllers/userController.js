@@ -37,6 +37,27 @@ exports.registerUser = async (req, res) => {
     }
 };
 
+// 이메일 중복 검사 API
+exports.checkEmail = async (req, res) => {
+    const { email } = req.query; // GET 요청으로 전달받음
+
+    if (!email) {
+        return res.status(400).json({ message: '이메일을 입력해주세요.' });
+    }
+
+    try {
+        const [existingEmail] = await pool.execute('SELECT * FROM user WHERE email = ?', [email]);
+        if (existingEmail.length > 0) {
+            return res.status(409).json({ message: '이미 등록된 이메일입니다.' }); // Conflict
+        }
+        res.status(200).json({ message: '사용 가능한 이메일입니다.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+    }
+};
+
+
 // 닉네임 중복 검사 API
 exports.checkUsername = async (req, res) => {
     const { username } = req.query; // GET 요청으로 전달받음
