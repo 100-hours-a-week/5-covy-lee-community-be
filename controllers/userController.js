@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db2');
+const { encode } = require('html-entities'); // html-entities 추가
 
-// 회원가입 함수
 exports.registerUser = async (req, res) => {
     const { email, password, username } = req.body;
     const profilePic = req.file ? req.file.filename : null;
@@ -17,17 +17,20 @@ exports.registerUser = async (req, res) => {
             return res.status(400).json({ message: '이미 등록된 이메일입니다.' });
         }
 
-        // username 중복 검사
+        // 닉네임 중복 검사
         const [existingUsername] = await pool.execute('SELECT * FROM user WHERE username = ?', [username]);
         if (existingUsername.length > 0) {
             return res.status(400).json({ message: '이미 사용 중인 닉네임입니다.' });
         }
 
+        // 닉네임 이스케이프 처리
+        const sanitizedUsername = encode(username);
+
         // 비밀번호 해싱 및 사용자 등록
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await pool.execute(
             'INSERT INTO user (email, password, username, image) VALUES (?, ?, ?, ?)',
-            [email, hashedPassword, username, profilePic]
+            [email, hashedPassword, sanitizedUsername, profilePic]
         );
 
         res.status(201).json({ message: '회원가입 성공!', userId: result.insertId });
@@ -36,6 +39,7 @@ exports.registerUser = async (req, res) => {
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 // 이메일 중복 검사 API
 exports.checkEmail = async (req, res) => {
@@ -119,23 +123,23 @@ exports.logoutUser = (req, res) => {
 
 
 exports.updateUserProfile = async (req, res) => {
-    const userId = req.params.userId; // URL에서 사용자 ID 추출
-    const { username } = req.body; // 요청 본문에서 사용자명 추출
-    const profilePic = req.file ? req.file.filename : null; // multer에서 처리된 프로필 이미지 파일 이름
+    const userId = req.params.userId;
+    const { username } = req.body;
+    const profilePic = req.file ? req.file.filename : null;
 
-    // 입력 데이터 유효성 검사
     if (!username && !profilePic) {
         return res.status(400).json({ message: '수정할 정보가 없습니다.' });
     }
 
     try {
-        // 사용자 정보 업데이트를 위한 SQL 쿼리 작성
         let updateQuery = 'UPDATE user SET ';
         let updateParams = [];
 
         if (username) {
+            // 닉네임 이스케이프 처리
+            const sanitizedUsername = encode(username);
             updateQuery += 'username = ?, ';
-            updateParams.push(username);
+            updateParams.push(sanitizedUsername);
         }
 
         if (profilePic) {
@@ -147,28 +151,21 @@ exports.updateUserProfile = async (req, res) => {
         updateQuery += ' WHERE user_id = ?';
         updateParams.push(userId);
 
-        // 데이터베이스에 업데이트 실행
         const [result] = await pool.execute(updateQuery, updateParams);
 
         if (result.affectedRows > 0) {
-            // 세션 데이터 갱신
             if (!req.session.user) {
                 req.session.user = {};
             }
             if (username) req.session.user.username = username;
             if (profilePic) req.session.user.image = profilePic;
 
-            // 세션 저장
             req.session.save((err) => {
                 if (err) {
                     console.error('세션 저장 오류:', err);
                     return res.status(500).json({ message: '세션 저장 중 오류가 발생했습니다.' });
                 }
 
-                // 세션 저장 후 서버 콘솔에 최신 데이터 출력
-                console.log('최신 세션 데이터:', req.session.user);
-
-                // 성공적인 응답 반환
                 return res.status(200).json({
                     message: '회원정보가 성공적으로 업데이트되었습니다.',
                     user: {
@@ -186,6 +183,7 @@ exports.updateUserProfile = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 
 exports.checkSession = async (req, res) => {
