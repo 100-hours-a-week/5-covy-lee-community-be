@@ -23,14 +23,11 @@ exports.registerUser = async (req, res) => {
             return res.status(400).json({ message: '이미 사용 중인 닉네임입니다.' });
         }
 
-        // 닉네임 이스케이프 처리
-        const sanitizedUsername = encode(username);
-
         // 비밀번호 해싱 및 사용자 등록
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await pool.execute(
             'INSERT INTO user (email, password, username, image) VALUES (?, ?, ?, ?)',
-            [email, hashedPassword, sanitizedUsername, profilePic]
+            [email, hashedPassword, username, profilePic]
         );
 
         res.status(201).json({ message: '회원가입 성공!', userId: result.insertId });
@@ -39,6 +36,7 @@ exports.registerUser = async (req, res) => {
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 
 // 이메일 중복 검사 API
@@ -99,9 +97,13 @@ exports.loginUser = async (req, res) => {
             return res.status(401).json({ message: '이메일 또는 비밀번호가 잘못되었습니다.' });
         }
 
-        // 세션에 user 정보 저장
-        req.session.user = { id: user[0].user_id, email: user[0].email, username: user[0].username, image: user[0].image };
-
+        // 세션에 원본 데이터 저장
+        req.session.user = {
+            id: user[0].user_id,
+            email: user[0].email,
+            username: user[0].username, // HTML 이스케이프 처리 없이 저장
+            image: user[0].image,
+        };
 
         res.status(200).json({ message: '로그인 성공', user: req.session.user });
     } catch (error) {
@@ -109,6 +111,8 @@ exports.loginUser = async (req, res) => {
         res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
+
 
 exports.logoutUser = (req, res) => {
     req.session.destroy((err) => {
