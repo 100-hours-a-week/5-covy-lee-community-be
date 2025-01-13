@@ -1,4 +1,5 @@
 const pool = require("../config/db2");
+const { encode } = require("html-entities");
 
 exports.createComment = async (req, res) => {
     const { content } = req.body;
@@ -18,9 +19,12 @@ exports.createComment = async (req, res) => {
     }
 
     try {
+        // 댓글 내용 인코딩
+        const encodedContent = encode(content);
+
         const [result] = await pool.execute(
             'INSERT INTO comment (post_id, user_id, content) VALUES (?, ?, ?)',
-            [postId, userId, content]
+            [postId, userId, encodedContent]
         );
 
         const [user] = await pool.execute(
@@ -33,8 +37,8 @@ exports.createComment = async (req, res) => {
             commentId: result.insertId,
             author: user[0]?.username || '익명',
             author_image: user[0]?.image || null,
-            content,
-            created_at: new Date().toISOString(), // 댓글 작성 시간을 ISO 형식으로 반환
+            content: encodedContent,
+            created_at: new Date().toISOString(),
         });
     } catch (error) {
         console.error('댓글 작성 중 오류 발생:', error);
@@ -42,17 +46,17 @@ exports.createComment = async (req, res) => {
     }
 };
 
+
 exports.getComments = async (req, res) => {
     const postId = req.params.postId;
 
     try {
-        // 댓글 목록을 오래된 순으로 정렬하여 반환
         const [comments] = await pool.execute(
             `SELECT
                  c.comment_id,
                  c.content,
                  c.created_at,
-                 c.user_id AS author_id, -- 댓글 작성자 ID 추가
+                 c.user_id AS author_id,
                  u.username AS author,
                  u.image AS author_image
              FROM comment c
@@ -62,6 +66,7 @@ exports.getComments = async (req, res) => {
             [postId]
         );
 
+        // 이미 인코딩된 상태로 전달
         res.status(200).json(comments);
     } catch (error) {
         console.error('댓글 목록 가져오기 중 오류 발생:', error);
@@ -72,11 +77,12 @@ exports.getComments = async (req, res) => {
 
 
 
+
 // 댓글 수정 함수
 exports.updateComment = async (req, res) => {
-    const commentId = req.params.commentId; // URL 파라미터에서 commentId 가져오기
-    const { content } = req.body; // 수정할 댓글 내용
-    const userId = req.session?.user?.id || null; // 세션에서 사용자 ID 가져오기
+    const commentId = req.params.commentId;
+    const { content } = req.body;
+    const userId = req.session?.user?.id || null;
 
     if (!userId) {
         return res.status(401).json({ message: '로그인이 필요합니다.' });
@@ -87,7 +93,6 @@ exports.updateComment = async (req, res) => {
     }
 
     try {
-        // 댓글 작성자가 본인인지 확인
         const [comment] = await pool.execute(
             'SELECT * FROM comment WHERE comment_id = ? AND user_id = ?',
             [commentId, userId]
@@ -97,14 +102,19 @@ exports.updateComment = async (req, res) => {
             return res.status(403).json({ message: '댓글을 수정할 권한이 없습니다.' });
         }
 
-        // 댓글 내용 업데이트
+        // 댓글 내용 인코딩
+        const encodedContent = encode(content);
+
         const [result] = await pool.execute(
             'UPDATE comment SET content = ? WHERE comment_id = ?',
-            [content, commentId]
+            [encodedContent, commentId]
         );
 
         if (result.affectedRows > 0) {
-            return res.status(200).json({ message: '댓글이 성공적으로 수정되었습니다.' });
+            return res.status(200).json({
+                message: '댓글이 성공적으로 수정되었습니다.',
+                content: encodedContent,
+            });
         } else {
             return res.status(404).json({ message: '댓글을 찾을 수 없습니다.' });
         }
@@ -116,15 +126,14 @@ exports.updateComment = async (req, res) => {
 
 // 댓글 삭제 함수
 exports.deleteComment = async (req, res) => {
-    const commentId = req.params.commentId; // URL 파라미터에서 commentId 가져오기
-    const userId = req.session?.user?.id || null; // 세션에서 사용자 ID 가져오기
+    const commentId = req.params.commentId;
+    const userId = req.session?.user?.id || null;
 
     if (!userId) {
         return res.status(401).json({ message: '로그인이 필요합니다.' });
     }
 
     try {
-        // 댓글 작성자가 본인인지 확인
         const [comment] = await pool.execute(
             'SELECT * FROM comment WHERE comment_id = ? AND user_id = ?',
             [commentId, userId]
@@ -134,7 +143,6 @@ exports.deleteComment = async (req, res) => {
             return res.status(403).json({ message: '댓글을 삭제할 권한이 없습니다.' });
         }
 
-        // 댓글 삭제
         const [result] = await pool.execute('DELETE FROM comment WHERE comment_id = ?', [commentId]);
 
         if (result.affectedRows > 0) {
@@ -147,6 +155,7 @@ exports.deleteComment = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 
 
