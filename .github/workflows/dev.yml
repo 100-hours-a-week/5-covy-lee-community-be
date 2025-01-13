@@ -22,9 +22,18 @@ jobs:
           username: ${{ secrets.EC2_USER }}   # SSH 사용자명
           key: ${{ secrets.EC2_SSH_KEY }}     # SSH 개인 키
           script: |
-            cd /home/ubuntu/community/5-covy-lee-community-be   # 프로젝트 폴더 경로로 이동
-            git checkout master        # master 브랜치 확인
-            git pull origin master     # 최신 코드 가져오기
+            echo "Pulling latest code into Blue environment..."
+            cd /home/ubuntu/community/blue/5-covy-lee-community-be
+            git checkout master
+            git pull origin master
+            
+            echo "Pulling latest code into Green environment..."
+            cd /home/ubuntu/community/green/5-covy-lee-community-be
+            git checkout master
+            git pull origin master
+            
+            echo "Restarting servers..."
             cd /home/ubuntu
-            ./server-restart.sh # 서버 재실행
+            
+            ./server-start.sh blue
             echo "Git pull completed successfully!"
