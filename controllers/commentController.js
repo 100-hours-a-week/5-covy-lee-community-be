@@ -1,5 +1,17 @@
 const pool = require("../config/db2");
 const { encode } = require("html-entities");
+const redis = require("redis");
+
+// Redis 클라이언트 생성
+const redisClient = redis.createClient();
+
+(async () => {
+    try {
+        await redisClient.connect(); // Redis 연결
+    } catch (error) {
+        console.error("Redis 연결 실패:", error);
+    }
+})();
 
 exports.createComment = async (req, res) => {
     const { content } = req.body;
@@ -19,13 +31,15 @@ exports.createComment = async (req, res) => {
     }
 
     try {
-        // 댓글 내용 인코딩
         const encodedContent = encode(content);
 
         const [result] = await pool.execute(
             'INSERT INTO comment (post_id, user_id, content) VALUES (?, ?, ?)',
             [postId, userId, encodedContent]
         );
+
+        // Redis 캐시 무효화
+        await redisClient.del(`comments:${postId}`);
 
         const [user] = await pool.execute(
             'SELECT username, image FROM user WHERE user_id = ?',
@@ -47,10 +61,19 @@ exports.createComment = async (req, res) => {
 };
 
 
+
 exports.getComments = async (req, res) => {
     const postId = req.params.postId;
+    const cacheKey = `comments:${postId}`; // Redis 키 생성
 
     try {
+        // Redis 캐시 조회
+        const cachedComments = await redisClient.get(cacheKey);
+        if (cachedComments) {
+            return res.status(200).json(JSON.parse(cachedComments)); // 캐싱된 데이터 반환
+        }
+
+        // 데이터베이스 조회
         const [comments] = await pool.execute(
             `SELECT
                  c.comment_id,
@@ -66,13 +89,16 @@ exports.getComments = async (req, res) => {
             [postId]
         );
 
-        // 이미 인코딩된 상태로 전달
+        // Redis에 캐싱 (30분)
+        await redisClient.set(cacheKey, JSON.stringify(comments), { EX: 1800 });
+
         res.status(200).json(comments);
     } catch (error) {
         console.error('댓글 목록 가져오기 중 오류 발생:', error);
         res.status(500).json({ message: '댓글 목록을 가져오는 데 실패했습니다.' });
     }
 };
+
 
 
 
@@ -102,7 +128,6 @@ exports.updateComment = async (req, res) => {
             return res.status(403).json({ message: '댓글을 수정할 권한이 없습니다.' });
         }
 
-        // 댓글 내용 인코딩
         const encodedContent = encode(content);
 
         const [result] = await pool.execute(
@@ -111,6 +136,10 @@ exports.updateComment = async (req, res) => {
         );
 
         if (result.affectedRows > 0) {
+            // Redis 캐시 무효화
+            const postId = comment[0].post_id;
+            await redisClient.del(`comments:${postId}`);
+
             return res.status(200).json({
                 message: '댓글이 성공적으로 수정되었습니다.',
                 content: encodedContent,
@@ -123,6 +152,7 @@ exports.updateComment = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 // 댓글 삭제 함수
 exports.deleteComment = async (req, res) => {
@@ -146,6 +176,10 @@ exports.deleteComment = async (req, res) => {
         const [result] = await pool.execute('DELETE FROM comment WHERE comment_id = ?', [commentId]);
 
         if (result.affectedRows > 0) {
+            // Redis 캐시 무효화
+            const postId = comment[0].post_id;
+            await redisClient.del(`comments:${postId}`);
+
             return res.status(200).json({ message: '댓글이 성공적으로 삭제되었습니다.' });
         } else {
             return res.status(404).json({ message: '댓글을 찾을 수 없습니다.' });
@@ -155,8 +189,3 @@ exports.deleteComment = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
-
-
-
-
-

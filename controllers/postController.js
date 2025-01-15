@@ -8,7 +8,6 @@ const redisClient = redis.createClient();
 (async () => {
     try {
         await redisClient.connect(); // Redis 연결
-        console.log("Redis 연결 성공");
     } catch (error) {
         console.error("Redis 연결 실패:", error);
     }
@@ -34,6 +33,9 @@ exports.createPost = async (req, res) => {
             [userId, title, content, image]
         );
 
+        // 게시글 목록 캐시 무효화
+        await redisClient.del('posts:list');
+
         res.status(201).json({
             message: "게시글이 성공적으로 작성되었습니다.",
             postId: result.insertId,
@@ -44,35 +46,41 @@ exports.createPost = async (req, res) => {
     }
 };
 
+
 // 게시글 목록 가져오기
 exports.getPosts = async (req, res) => {
+    const cacheKey = 'posts:list';
+
     try {
-        const [posts] = await pool.execute(
-            `SELECT
-                 post.post_id AS id,
-                 post.title,
-                 post.content,
-                 post.image,
-                 post.created_at,
-                 post.views,
-                 user.user_id AS author_id,
-                 user.username AS author,
-                 user.image AS author_image,
-                 (SELECT COUNT(*) FROM comment WHERE comment.post_id = post.post_id) AS comment_count,
-                 (SELECT COUNT(*) FROM \`like\` WHERE \`like\`.post_id = post.post_id) AS like_count
-             FROM post
-             INNER JOIN user ON post.user_id = user.user_id
-             ORDER BY post.created_at DESC`
-        );
+        // Redis 캐시 조회
+        const cachedPosts = await redisClient.get(cacheKey);
+        if (cachedPosts) {
+            return res.status(200).json(JSON.parse(cachedPosts)); // 캐싱된 원본 데이터 반환
+        }
 
-        // 출력 데이터에 대해 HTML 엔티티 이스케이프 처리
-        const sanitizedPosts = posts.map(post => ({
-            ...post,
-            title: encode(post.title),
-            content: encode(post.content),
-        }));
+        // 데이터베이스 조회
+        const [posts] = await pool.execute(`
+            SELECT
+                post.post_id AS id,
+                post.title,
+                post.content,
+                post.image,
+                post.created_at,
+                post.views,
+                user.user_id AS author_id,
+                user.username AS author,
+                user.image AS author_image,
+                (SELECT COUNT(*) FROM comment WHERE comment.post_id = post.post_id) AS comment_count,
+                (SELECT COUNT(*) FROM \`like\` WHERE \`like\`.post_id = post.post_id) AS like_count
+            FROM post
+            INNER JOIN user ON post.user_id = user.user_id
+            ORDER BY post.created_at DESC
+        `);
 
-        res.status(200).json(sanitizedPosts);
+        // Redis에 원본 데이터 저장
+        await redisClient.set(cacheKey, JSON.stringify(posts), { EX: 3600 });
+
+        res.status(200).json(posts); // 원본 데이터 반환
     } catch (error) {
         console.error("게시글 목록 가져오기 오류:", error);
         res.status(500).json({ message: "서버 오류가 발생했습니다." });
@@ -82,25 +90,32 @@ exports.getPosts = async (req, res) => {
 // 특정 게시글 가져오기
 exports.getPostById = async (req, res) => {
     const { postId } = req.params;
+    const cacheKey = `post:${postId}`;
 
     try {
-        const [posts] = await pool.execute(
-            `SELECT
-                 post.post_id AS id,
-                 post.title,
-                 post.content,
-                 post.image,
-                 post.created_at,
-                 post.updated_at,
-                 post.views,
-                 user.user_id AS author_id,
-                 user.username AS author,
-                 user.image AS author_image
-             FROM post
-                      INNER JOIN user ON post.user_id = user.user_id
-             WHERE post.post_id = ?`,
-            [postId]
-        );
+        // Redis 캐시 조회
+        const cachedPost = await redisClient.get(cacheKey);
+        if (cachedPost) {
+            return res.status(200).json(JSON.parse(cachedPost)); // 캐싱된 데이터 반환
+        }
+
+        // 데이터베이스 조회
+        const [posts] = await pool.execute(`
+            SELECT
+                post.post_id AS id,
+                post.title,
+                post.content,
+                post.image,
+                post.created_at,
+                post.updated_at,
+                post.views,
+                user.user_id AS author_id,
+                user.username AS author,
+                user.image AS author_image
+            FROM post
+            INNER JOIN user ON post.user_id = user.user_id
+            WHERE post.post_id = ?
+        `, [postId]);
 
         if (posts.length === 0) {
             return res.status(404).json({ message: "게시글을 찾을 수 없습니다." });
@@ -108,13 +123,16 @@ exports.getPostById = async (req, res) => {
 
         const post = posts[0];
 
-        // HTML 이스케이프 처리를 하지 않음
+        // Redis에 캐싱 (30분)
+        await redisClient.set(cacheKey, JSON.stringify(post), { EX: 1800 });
+
         res.status(200).json(post);
     } catch (error) {
         console.error("특정 게시글 가져오기 오류:", error);
         res.status(500).json({ message: "서버 오류가 발생했습니다." });
     }
 };
+
 
 
 // 게시글 수정
@@ -133,6 +151,7 @@ exports.updatePost = async (req, res) => {
     }
 
     try {
+        // 게시글 존재 여부 및 수정 권한 확인
         const [posts] = await pool.execute(
             "SELECT * FROM post WHERE post_id = ? AND user_id = ?",
             [postId, userId]
@@ -163,6 +182,10 @@ exports.updatePost = async (req, res) => {
         const query = `UPDATE post SET ${fields.join(", ")} WHERE post_id = ?`;
         await pool.execute(query, values);
 
+        // 게시글 목록 및 특정 게시글 캐시 무효화
+        await redisClient.del('posts:list');
+        await redisClient.del(`post:${postId}`);
+
         res.status(200).json({ message: "게시글이 성공적으로 수정되었습니다." });
     } catch (error) {
         console.error("게시글 수정 중 오류 발생:", error);
@@ -170,12 +193,14 @@ exports.updatePost = async (req, res) => {
     }
 };
 
+
 // 게시글 삭제
 exports.deletePost = async (req, res) => {
     const { postId } = req.params;
     const userId = req.session?.user?.id || null;
 
     try {
+        // 게시글 존재 여부 및 삭제 권한 확인
         const [posts] = await pool.execute(
             "SELECT * FROM post WHERE post_id = ? AND user_id = ?",
             [postId, userId]
@@ -187,12 +212,17 @@ exports.deletePost = async (req, res) => {
 
         await pool.execute("DELETE FROM post WHERE post_id = ?", [postId]);
 
+        // 게시글 목록 및 특정 게시글 캐시 무효화
+        await redisClient.del('posts:list');
+        await redisClient.del(`post:${postId}`);
+
         res.status(200).json({ message: "게시글이 성공적으로 삭제되었습니다." });
     } catch (error) {
         console.error("게시글 삭제 중 오류 발생:", error);
         res.status(500).json({ message: "서버 오류가 발생했습니다." });
     }
 };
+
 
 // 게시글 조회수 증가
 exports.increaseViewCount = async (req, res) => {
