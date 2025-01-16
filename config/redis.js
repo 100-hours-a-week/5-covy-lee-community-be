@@ -11,4 +11,28 @@ const redisClient = redis.createClient();
     }
 })();
 
-module.exports = redisClient;
+// 'view:'로 시작하지 않는 Redis 키를 삭제하는 함수
+const deleteNonViewKeys = async () => {
+    try {
+        const allKeys = await redisClient.keys('*'); // 모든 Redis 키 가져오기
+        const keysToDelete = allKeys.filter((key) => !key.startsWith('view:')); // 'view:'로 시작하지 않는 키 필터링
+
+        if (keysToDelete.length > 0) {
+            for (const key of keysToDelete) {
+                await redisClient.del(key); // 개별 키 삭제
+            }
+            console.log(`삭제된 키: ${keysToDelete}`);
+        } else {
+            console.log('삭제할 키가 없습니다.');
+        }
+    } catch (error) {
+        console.error('Redis 키 삭제 중 오류 발생:', error);
+    }
+};
+
+// redisClient와 deleteNonViewKeys 함수 내보내기
+module.exports = {
+    redisClient,
+    deleteNonViewKeys,
+};
+

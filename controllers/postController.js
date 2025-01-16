@@ -1,6 +1,5 @@
 const pool = require("../config/db2");
-const redisClient = require("../config/redis"); // 공통 Redis 클라이언트 사용
-const { encode } = require("html-entities");
+const { redisClient, deleteNonViewKeys } = require("../config/redis");
 const CustomError = require("../utils/CustomError");
 
 
@@ -25,7 +24,7 @@ exports.createPost = async (req, res, next) => {
             [userId, title, content, image]
         );
 
-        await redisClient.del('posts:list');
+        await deleteNonViewKeys();
 
         res.status(201).json({
             message: "게시글이 성공적으로 작성되었습니다.",
@@ -155,8 +154,7 @@ exports.updatePost = async (req, res, next) => {
         const query = `UPDATE post SET ${fields.join(", ")} WHERE post_id = ?`;
         await pool.execute(query, values);
 
-        await redisClient.del('posts:list');
-        await redisClient.del(`post:${postId}`);
+        await deleteNonViewKeys();
 
         res.status(200).json({ message: "게시글이 성공적으로 수정되었습니다." });
     } catch (error) {
@@ -182,8 +180,7 @@ exports.deletePost = async (req, res, next) => {
         }
 
         await pool.execute("DELETE FROM post WHERE post_id = ?", [postId]);
-        await redisClient.del('posts:list');
-        await redisClient.del(`post:${postId}`);
+        await deleteNonViewKeys();
 
         res.status(200).json({ message: "게시글이 성공적으로 삭제되었습니다." });
     } catch (error) {

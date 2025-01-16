@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db2');
-const redisClient = require("../config/redis"); // 공통 Redis 클라이언트 사용
+const { deleteNonViewKeys } = require("../config/redis");
 const { encode } = require("html-entities");
 
 
@@ -130,6 +130,7 @@ exports.logoutUser = (req, res) => {
 
 
 
+
 exports.updateUserProfile = async (req, res) => {
     const userId = req.params.userId;
     const { username } = req.body;
@@ -144,7 +145,6 @@ exports.updateUserProfile = async (req, res) => {
         let updateParams = [];
 
         if (username) {
-            // 닉네임 이스케이프 처리
             const sanitizedUsername = encode(username);
             updateQuery += 'username = ?, ';
             updateParams.push(sanitizedUsername);
@@ -155,14 +155,13 @@ exports.updateUserProfile = async (req, res) => {
             updateParams.push(profilePic);
         }
 
-        updateQuery = updateQuery.slice(0, -2); // 마지막 콤마 제거
+        updateQuery = updateQuery.slice(0, -2);
         updateQuery += ' WHERE user_id = ?';
         updateParams.push(userId);
 
         const [result] = await pool.execute(updateQuery, updateParams);
 
         if (result.affectedRows > 0) {
-            // 세션 업데이트
             if (!req.session.user) {
                 req.session.user = {};
             }
@@ -176,9 +175,8 @@ exports.updateUserProfile = async (req, res) => {
                 }
 
                 try {
-                    // Redis 캐시 삭제
-                    await redisClient.del('posts:list');
-                    console.log('Redis 캐시 삭제 완료: user:list, user:${userId}');
+                    // 조회수 키 제외하고 Redis 키 삭제
+                    await deleteNonViewKeys();
 
                     return res.status(200).json({
                         message: '회원정보가 성공적으로 업데이트되었습니다.',
@@ -201,6 +199,7 @@ exports.updateUserProfile = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 
 
