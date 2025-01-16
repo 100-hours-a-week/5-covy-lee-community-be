@@ -1,6 +1,7 @@
 const pool = require("../config/db2");
 const redis = require("redis");
 const { encode } = require("html-entities");
+const CustomError = require("../utils/CustomError");
 
 // Redis 클라이언트 생성
 const redisClient = redis.createClient();
@@ -14,17 +15,17 @@ const redisClient = redis.createClient();
 })();
 
 // 게시글 생성
-exports.createPost = async (req, res) => {
+exports.createPost = async (req, res, next) => {
     const { title, content } = req.body;
     const userId = req.session?.user?.id || null;
     const image = req.file ? req.file.filename : null;
 
     if (!title || !content) {
-        return res.status(400).json({ message: "제목과 내용을 모두 입력해야 합니다." });
+        return next(new CustomError(400, "제목과 내용을 모두 입력해야 합니다."));
     }
 
     if (!userId) {
-        return res.status(401).json({ message: "로그인이 필요합니다." });
+        return next(new CustomError(401, "로그인이 필요합니다."));
     }
 
     try {
@@ -33,7 +34,6 @@ exports.createPost = async (req, res) => {
             [userId, title, content, image]
         );
 
-        // 게시글 목록 캐시 무효화
         await redisClient.del('posts:list');
 
         res.status(201).json({
@@ -41,24 +41,22 @@ exports.createPost = async (req, res) => {
             postId: result.insertId,
         });
     } catch (error) {
-        console.error("게시글 작성 중 오류 발생:", error);
-        res.status(500).json({ message: "서버 오류가 발생했습니다." });
+        next(new CustomError(500, "게시글 작성 중 서버 오류가 발생했습니다."));
     }
 };
 
 
+
 // 게시글 목록 가져오기
-exports.getPosts = async (req, res) => {
+exports.getPosts = async (req, res, next) => {
     const cacheKey = 'posts:list';
 
     try {
-        // Redis 캐시 조회
         const cachedPosts = await redisClient.get(cacheKey);
         if (cachedPosts) {
-            return res.status(200).json(JSON.parse(cachedPosts)); // 캐싱된 원본 데이터 반환
+            return res.status(200).json(JSON.parse(cachedPosts));
         }
 
-        // 데이터베이스 조회
         const [posts] = await pool.execute(`
             SELECT
                 post.post_id AS id,
@@ -73,33 +71,30 @@ exports.getPosts = async (req, res) => {
                 (SELECT COUNT(*) FROM comment WHERE comment.post_id = post.post_id) AS comment_count,
                 (SELECT COUNT(*) FROM \`like\` WHERE \`like\`.post_id = post.post_id) AS like_count
             FROM post
-            INNER JOIN user ON post.user_id = user.user_id
+                     INNER JOIN user ON post.user_id = user.user_id
             ORDER BY post.created_at DESC
         `);
 
-        // Redis에 원본 데이터 저장
         await redisClient.set(cacheKey, JSON.stringify(posts), { EX: 3600 });
 
-        res.status(200).json(posts); // 원본 데이터 반환
+        res.status(200).json(posts);
     } catch (error) {
-        console.error("게시글 목록 가져오기 오류:", error);
-        res.status(500).json({ message: "서버 오류가 발생했습니다." });
+        next(new CustomError(500, "게시글 목록을 가져오는 중 서버 오류가 발생했습니다."));
     }
 };
 
+
 // 특정 게시글 가져오기
-exports.getPostById = async (req, res) => {
+exports.getPostById = async (req, res, next) => {
     const { postId } = req.params;
     const cacheKey = `post:${postId}`;
 
     try {
-        // Redis 캐시 조회
         const cachedPost = await redisClient.get(cacheKey);
         if (cachedPost) {
-            return res.status(200).json(JSON.parse(cachedPost)); // 캐싱된 데이터 반환
+            return res.status(200).json(JSON.parse(cachedPost));
         }
 
-        // 데이터베이스 조회
         const [posts] = await pool.execute(`
             SELECT
                 post.post_id AS id,
@@ -113,122 +108,104 @@ exports.getPostById = async (req, res) => {
                 user.username AS author,
                 user.image AS author_image
             FROM post
-            INNER JOIN user ON post.user_id = user.user_id
+                     INNER JOIN user ON post.user_id = user.user_id
             WHERE post.post_id = ?
         `, [postId]);
 
         if (posts.length === 0) {
-            return res.status(404).json({ message: "게시글을 찾을 수 없습니다." });
+            return next(new CustomError(404, "게시글을 찾을 수 없습니다."));
         }
 
         const post = posts[0];
-
-        // Redis에 캐싱 (30분)
         await redisClient.set(cacheKey, JSON.stringify(post), { EX: 1800 });
 
         res.status(200).json(post);
     } catch (error) {
-        console.error("특정 게시글 가져오기 오류:", error);
-        res.status(500).json({ message: "서버 오류가 발생했습니다." });
+        next(new CustomError(500, "특정 게시글을 가져오는 중 서버 오류가 발생했습니다."));
     }
 };
 
 
 
+
 // 게시글 수정
-exports.updatePost = async (req, res) => {
+exports.updatePost = async (req, res, next) => {
     const { postId } = req.params;
     const { title, content } = req.body;
     const userId = req.session?.user?.id || null;
     const image = req.file ? req.file.filename : null;
 
     if (!userId) {
-        return res.status(401).json({ message: "로그인이 필요합니다." });
+        return next(new CustomError(401, "로그인이 필요합니다."));
     }
 
     if (!postId) {
-        return res.status(400).json({ message: "게시글 ID가 필요합니다." });
+        return next(new CustomError(400, "게시글 ID가 필요합니다."));
     }
 
     try {
-        // 게시글 존재 여부 및 수정 권한 확인
         const [posts] = await pool.execute(
             "SELECT * FROM post WHERE post_id = ? AND user_id = ?",
             [postId, userId]
         );
 
         if (posts.length === 0) {
-            return res.status(403).json({ message: "게시글 수정 권한이 없습니다." });
+            return next(new CustomError(403, "게시글 수정 권한이 없습니다."));
         }
 
         const fields = [];
         const values = [];
 
-        if (title) {
-            fields.push("title = ?");
-            values.push(title);
-        }
-        if (content) {
-            fields.push("content = ?");
-            values.push(content);
-        }
-        if (image) {
-            fields.push("image = ?");
-            values.push(image);
-        }
-
-        values.push(postId);
+        if (title) fields.push("title = ?");
+        if (content) fields.push("content = ?");
+        if (image) fields.push("image = ?");
+        values.push(...[title, content, image].filter(Boolean), postId);
 
         const query = `UPDATE post SET ${fields.join(", ")} WHERE post_id = ?`;
         await pool.execute(query, values);
 
-        // 게시글 목록 및 특정 게시글 캐시 무효화
         await redisClient.del('posts:list');
         await redisClient.del(`post:${postId}`);
 
         res.status(200).json({ message: "게시글이 성공적으로 수정되었습니다." });
     } catch (error) {
-        console.error("게시글 수정 중 오류 발생:", error);
-        res.status(500).json({ message: "서버 오류가 발생했습니다." });
+        next(new CustomError(500, "게시글 수정 중 서버 오류가 발생했습니다."));
     }
 };
 
 
+
 // 게시글 삭제
-exports.deletePost = async (req, res) => {
+exports.deletePost = async (req, res, next) => {
     const { postId } = req.params;
     const userId = req.session?.user?.id || null;
 
     try {
-        // 게시글 존재 여부 및 삭제 권한 확인
         const [posts] = await pool.execute(
             "SELECT * FROM post WHERE post_id = ? AND user_id = ?",
             [postId, userId]
         );
 
         if (posts.length === 0) {
-            return res.status(403).json({ message: "게시글 삭제 권한이 없습니다." });
+            return next(new CustomError(403, "게시글 삭제 권한이 없습니다."));
         }
 
         await pool.execute("DELETE FROM post WHERE post_id = ?", [postId]);
-
-        // 게시글 목록 및 특정 게시글 캐시 무효화
         await redisClient.del('posts:list');
         await redisClient.del(`post:${postId}`);
 
         res.status(200).json({ message: "게시글이 성공적으로 삭제되었습니다." });
     } catch (error) {
-        console.error("게시글 삭제 중 오류 발생:", error);
-        res.status(500).json({ message: "서버 오류가 발생했습니다." });
+        next(new CustomError(500, "게시글 삭제 중 서버 오류가 발생했습니다."));
     }
 };
 
 
+
 // 게시글 조회수 증가
-exports.increaseViewCount = async (req, res) => {
+exports.increaseViewCount = async (req, res, next) => {
     const { postId } = req.params;
     const userIdentifier = req.ip;
-
     const cacheKey = `view:${postId}:${userIdentifier}`;
 
     try {
@@ -239,18 +216,16 @@ exports.increaseViewCount = async (req, res) => {
         }
 
         await pool.execute("UPDATE post SET views = views + 1 WHERE post_id = ?", [postId]);
-
         await redisClient.set(cacheKey, "true", { EX: 60 * 60 });
 
         const [rows] = await pool.execute("SELECT views FROM post WHERE post_id = ?", [postId]);
 
         if (rows.length === 0) {
-            return res.status(404).json({ message: "게시글을 찾을 수 없습니다." });
+            return next(new CustomError(404, "게시글을 찾을 수 없습니다."));
         }
 
         res.status(200).json({ views: rows[0].views });
     } catch (error) {
-        console.error("조회수 증가 중 오류 발생:", error);
-        res.status(500).json({ message: "조회수 업데이트 중 오류가 발생했습니다." });
+        next(new CustomError(500, "조회수 업데이트 중 서버 오류가 발생했습니다."));
     }
 };
