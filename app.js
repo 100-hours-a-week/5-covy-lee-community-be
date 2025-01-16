@@ -6,7 +6,8 @@ const userRoutes = require('./routes/user'); // 사용자 라우트 모듈 가�
 const postRoutes = require('./routes/post'); // 사용자 라우트 모듈 가져오기
 const commentRoutes = require('./routes/comment'); // 사용자 라우트 모듈 가져오기
 const likeRoutes = require('./routes/like'); // 사용자 라우트 모듈 가져오기
-
+const errorHandler = require('./middlewares/errorHandler');
+const CustomError = require('./utils/CustomError');
 const cors = require('cors');
 const session = require('express-session');
 require('dotenv').config();
@@ -43,8 +44,10 @@ app.use(userRoutes);
 app.use(postRoutes);
 app.use(commentRoutes);
 app.use(likeRoutes);
-
-
+app.use((req, res, next) => {
+    next(new CustomError(404, "API 경로를 찾을 수 없습니다."));
+});
+app.use(errorHandler);
 
 app.listen(PORT, () => {
     console.log(`서버가 http://localhost:${PORT}에서 실행 중입니다.`);
