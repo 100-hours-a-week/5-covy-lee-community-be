@@ -1,6 +1,10 @@
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db2');
-const { encode } = require('html-entities'); // html-entities 추가
+const redisClient = require("../config/redis"); // 공통 Redis 클라이언트 사용
+const { encode } = require("html-entities");
+
+
+
 
 exports.registerUser = async (req, res) => {
     const { email, password, username } = req.body;
@@ -158,26 +162,36 @@ exports.updateUserProfile = async (req, res) => {
         const [result] = await pool.execute(updateQuery, updateParams);
 
         if (result.affectedRows > 0) {
+            // 세션 업데이트
             if (!req.session.user) {
                 req.session.user = {};
             }
             if (username) req.session.user.username = username;
             if (profilePic) req.session.user.image = profilePic;
 
-            req.session.save((err) => {
+            req.session.save(async (err) => {
                 if (err) {
                     console.error('세션 저장 오류:', err);
                     return res.status(500).json({ message: '세션 저장 중 오류가 발생했습니다.' });
                 }
 
-                return res.status(200).json({
-                    message: '회원정보가 성공적으로 업데이트되었습니다.',
-                    user: {
-                        id: userId,
-                        username: req.session.user.username,
-                        image: req.session.user.image,
-                    },
-                });
+                try {
+                    // Redis 캐시 삭제
+                    await redisClient.del('posts:list');
+                    console.log('Redis 캐시 삭제 완료: user:list, user:${userId}');
+
+                    return res.status(200).json({
+                        message: '회원정보가 성공적으로 업데이트되었습니다.',
+                        user: {
+                            id: userId,
+                            username: req.session.user.username,
+                            image: req.session.user.image,
+                        },
+                    });
+                } catch (redisError) {
+                    console.error('Redis 캐시 삭제 중 오류 발생:', redisError);
+                    return res.status(500).json({ message: '회원정보는 업데이트되었지만 캐시 삭제 중 오류가 발생했습니다.' });
+                }
             });
         } else {
             return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
@@ -187,6 +201,7 @@ exports.updateUserProfile = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
+
 
 
 

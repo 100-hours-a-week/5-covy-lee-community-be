@@ -1,18 +1,9 @@
 const pool = require("../config/db2");
-const redis = require("redis");
+const redisClient = require("../config/redis"); // 공통 Redis 클라이언트 사용
 const { encode } = require("html-entities");
 const CustomError = require("../utils/CustomError");
 
-// Redis 클라이언트 생성
-const redisClient = redis.createClient();
 
-(async () => {
-    try {
-        await redisClient.connect(); // Redis 연결
-    } catch (error) {
-        console.error("Redis 연결 실패:", error);
-    }
-})();
 
 // 게시글 생성
 exports.createPost = async (req, res, next) => {
