@@ -1,17 +1,7 @@
 const pool = require("../config/db2");
 const { encode } = require("html-entities");
-const redis = require("redis");
+const { redisClient, deleteNonViewKeys } = require("../config/redis");
 
-// Redis 클라이언트 생성
-const redisClient = redis.createClient();
-
-(async () => {
-    try {
-        await redisClient.connect(); // Redis 연결
-    } catch (error) {
-        console.error("Redis 연결 실패:", error);
-    }
-})();
 
 exports.createComment = async (req, res) => {
     const { content } = req.body;
@@ -39,7 +29,7 @@ exports.createComment = async (req, res) => {
         );
 
         // Redis 캐시 무효화
-        await redisClient.del(`comments:${postId}`);
+        await deleteNonViewKeys();
 
         const [user] = await pool.execute(
             'SELECT username, image FROM user WHERE user_id = ?',
@@ -138,7 +128,7 @@ exports.updateComment = async (req, res) => {
         if (result.affectedRows > 0) {
             // Redis 캐시 무효화
             const postId = comment[0].post_id;
-            await redisClient.del(`comments:${postId}`);
+            await deleteNonViewKeys();
 
             return res.status(200).json({
                 message: '댓글이 성공적으로 수정되었습니다.',
@@ -178,7 +168,7 @@ exports.deleteComment = async (req, res) => {
         if (result.affectedRows > 0) {
             // Redis 캐시 무효화
             const postId = comment[0].post_id;
-            await redisClient.del(`comments:${postId}`);
+            await deleteNonViewKeys();
 
             return res.status(200).json({ message: '댓글이 성공적으로 삭제되었습니다.' });
         } else {
