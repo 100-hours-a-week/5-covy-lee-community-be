@@ -11,7 +11,7 @@ const redisClient = redis.createClient();
     }
 })();
 
-// 'view:'로 시작하지 않는 Redis 키를 삭제하는 함수
+// 조회수 Redis 키를 제외한 모든 키를 삭제하는 함수
 const deleteNonViewKeys = async () => {
     try {
         const allKeys = await redisClient.keys('*'); // 모든 Redis 키 가져오기
@@ -30,7 +30,6 @@ const deleteNonViewKeys = async () => {
     }
 };
 
-// redisClient와 deleteNonViewKeys 함수 내보내기
 module.exports = {
     redisClient,
     deleteNonViewKeys,
