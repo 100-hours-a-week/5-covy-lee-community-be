@@ -26,11 +26,13 @@ jobs:
             cd /home/ubuntu/community/blue/5-covy-lee-community-be
             git checkout master
             git pull origin master
+            npm install
             
             echo "Pulling latest code into Green environment..."
             cd /home/ubuntu/community/green/5-covy-lee-community-be
             git checkout master
             git pull origin master
+            npm install
             
             echo "Restarting servers..."
             cd /home/ubuntu
