@@ -1,10 +1,17 @@
 const redis = require("redis");
 
-const redisClient = redis.createClient();
+// Redis 클라이언트 생성
+const redisClient = redis.createClient({
+    socket: {
+        host: process.env.REDIS_HOST || '127.0.0.1', // Redis 호스트
+        port: process.env.REDIS_PORT || 6379,        // Redis 포트
+    }
+});
 
+// Redis 연결
 (async () => {
     try {
-        await redisClient.connect(); // Redis 연결
+        await redisClient.connect();
         console.log("Redis 연결 성공");
     } catch (error) {
         console.error("Redis 연결 실패:", error);
@@ -30,8 +37,10 @@ const deleteNonViewKeys = async () => {
     }
 };
 
+// 모듈 내보내기
 module.exports = {
     redisClient,
     deleteNonViewKeys,
 };
+
 
