@@ -37,5 +37,7 @@ jobs:
             echo "Restarting servers..."
             cd /home/ubuntu
             
+            pm2 stop all
+            pm2 delete all
             ./server-start.sh blue
             echo "Git pull completed successfully!"
