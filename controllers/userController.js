@@ -4,30 +4,30 @@ const { deleteNonViewKeys } = require("../config/redis");
 const { encode } = require("html-entities");
 
 
+// CloudFront 도메인
+const CLOUD_FRONT_URL = "https://d37qlhhkijorxm.cloudfront.net/";
 
-
+// 회원가입 API
 exports.registerUser = async (req, res) => {
     const { email, password, username } = req.body;
-    const profilePic = req.file ? req.file.filename : null;
+    const profilePic = req.file ? `${CLOUD_FRONT_URL}${req.file.key}` : null; // ✅ CloudFront URL 변환
 
     if (!email || !password || !username) {
         return res.status(400).json({ message: '모든 필드를 채워주세요.' });
     }
 
     try {
-        // 이메일 중복 검사
         const [existingEmail] = await pool.execute('SELECT * FROM user WHERE email = ?', [email]);
         if (existingEmail.length > 0) {
             return res.status(400).json({ message: '이미 등록된 이메일입니다.' });
         }
 
-        // 닉네임 중복 검사
         const [existingUsername] = await pool.execute('SELECT * FROM user WHERE username = ?', [username]);
         if (existingUsername.length > 0) {
             return res.status(400).json({ message: '이미 사용 중인 닉네임입니다.' });
         }
 
-        // 비밀번호 해싱 및 사용자 등록
+        // 비밀번호 해싱
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await pool.execute(
             'INSERT INTO user (email, password, username, image) VALUES (?, ?, ?, ?)',
@@ -129,12 +129,12 @@ exports.logoutUser = (req, res) => {
 };
 
 
-
-
 exports.updateUserProfile = async (req, res) => {
     const userId = req.params.userId;
     const { username } = req.body;
-    const profilePic = req.file ? req.file.filename : null;
+
+    // ✅ 프로필 이미지가 존재하면 CloudFront URL 적용
+    const profilePic = req.file ? `${CLOUD_FRONT_URL}${req.file.key}` : null;
 
     if (!username && !profilePic) {
         return res.status(400).json({ message: '수정할 정보가 없습니다.' });
@@ -145,11 +145,9 @@ exports.updateUserProfile = async (req, res) => {
         let updateParams = [];
 
         if (username) {
-            const sanitizedUsername = encode(username);
             updateQuery += 'username = ?, ';
-            updateParams.push(sanitizedUsername);
+            updateParams.push(username);
         }
-
         if (profilePic) {
             updateQuery += 'image = ?, ';
             updateParams.push(profilePic);
@@ -175,15 +173,13 @@ exports.updateUserProfile = async (req, res) => {
                 }
 
                 try {
-                    // 조회수 키 제외하고 Redis 키 삭제
                     await deleteNonViewKeys();
-
                     return res.status(200).json({
                         message: '회원정보가 성공적으로 업데이트되었습니다.',
                         user: {
                             id: userId,
                             username: req.session.user.username,
-                            image: req.session.user.image,
+                            image: req.session.user.image, // ✅ CloudFront URL이 반영된 이미지 반환
                         },
                     });
                 } catch (redisError) {
@@ -199,7 +195,6 @@ exports.updateUserProfile = async (req, res) => {
         return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
     }
 };
-
 
 
 

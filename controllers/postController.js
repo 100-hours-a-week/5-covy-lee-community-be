@@ -1,14 +1,16 @@
 const pool = require("../config/db2");
 const { redisClient, deleteNonViewKeys } = require("../config/redis");
 const CustomError = require("../utils/CustomError");
+const { postUpload } = require("../middlewares/middleware");
 
 
+// CloudFront 도메인 설정
+const CLOUD_FRONT_URL = "https://d37qlhhkijorxm.cloudfront.net/";
 
-// 게시글 생성
 exports.createPost = async (req, res, next) => {
     const { title, content } = req.body;
     const userId = req.session?.user?.id || null;
-    const image = req.file ? req.file.filename : null;
+    const image = req.file ? `${CLOUD_FRONT_URL}${req.file.key}` : null;  // S3 경로 변환
 
     if (!title || !content) {
         return next(new CustomError(400, "제목과 내용을 모두 입력해야 합니다."));
@@ -29,6 +31,7 @@ exports.createPost = async (req, res, next) => {
         res.status(201).json({
             message: "게시글이 성공적으로 작성되었습니다.",
             postId: result.insertId,
+            imageUrl: image
         });
     } catch (error) {
         next(new CustomError(500, "게시글 작성 중 서버 오류가 발생했습니다."));
@@ -52,7 +55,7 @@ exports.getPosts = async (req, res, next) => {
                 post.post_id AS id,
                 post.title,
                 post.content,
-                post.image,
+                post.image,  -- DB에 저장된 CloudFront 이미지 URL 사용
                 post.created_at,
                 post.views,
                 user.user_id AS author_id,
@@ -72,6 +75,7 @@ exports.getPosts = async (req, res, next) => {
         next(new CustomError(500, "게시글 목록을 가져오는 중 서버 오류가 발생했습니다."));
     }
 };
+
 
 
 // 특정 게시글 가져오기
